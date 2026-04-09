@@ -1,72 +1,53 @@
-import express from 'express';
-import cors from 'cors';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { initDatabase } from './config/database.js';
-import contactRoutes from './routes/contact.js';
-import uploadRoutes from './routes/upload.js';
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+import { initDatabase } from "./config/database.js";
+import contactRoutes from "./routes/contact.js";
+import uploadRoutes from "./routes/upload.js";
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Fix for __dirname in ES modules
+// Fix dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '10mb' })); // Added size limit for security
-app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Added for form data
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
 
-// Static files (React build)
-app.use(express.static(join(__dirname, '../client/dist')));
+// Static files
+app.use(express.static(join(__dirname, "../client/dist")));
 
-// Database setup with error handling
-initDatabase().catch(error => {
-  // Only exit if it's a critical error (not ownership issues)
-  if (error.code !== '42501') {
-    console.error('❌ Critical database initialization failed:', error);
-    process.exit(1);
-  }
-  console.log('⚠️  Database initialization had warnings but server can continue');
+// Database Init (Don't crash server)
+initDatabase().catch((err) => {
+  console.error("Database init error:", err);
 });
 
 // Routes
-app.use('/api/contact', contactRoutes);
-app.use('/api/upload', uploadRoutes);
+app.use("/api/contact", contactRoutes);
+app.use("/api/upload", uploadRoutes);
 
-// Health check with more detailed info
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: '✅ Server is running!',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "running",
+    time: new Date(),
   });
 });
 
-// Enhanced error handling middleware
-app.use((err, req, res, next) => {
-  console.error('🚨 Error:', err.stack);
-  res.status(500).json({ 
-    error: 'Something went wrong!',
-    message: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message
-  });
+// React catch all
+app.get("*", (req, res) => {
+  res.sendFile(join(__dirname, "../client/dist/index.html"));
 });
 
-// 404 handler for API routes
-app.use('/api/*', (req, res) => {
-  res.status(404).json({ error: 'API endpoint not found' });
-});
-
-// Catch-all → Serve React frontend (should be after API 404 handler)
-app.get('*', (req, res) => {
-  res.sendFile(join(__dirname, '../client/dist/index.html'));
-});
-
-// Start server with error handling
+// Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-}).on('error', (err) => {
-  console.error('❌ Server failed to start:', err);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
